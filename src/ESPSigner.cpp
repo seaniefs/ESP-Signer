@@ -677,6 +677,9 @@ bool ESP_Signer::handleTokenResponse(int &httpCode)
                         char *tmp = ut->getHeader(header.c_str(), esp_signer_pgm_str_31, esp_signer_pgm_str_32, pos, 0);
                         if (tmp)
                         {
+                            #ifdef _ESP_SIGNER_PROTOCOL_DEBUG_
+                                printf("Token response header %s\n", tmp);
+                            #endif
                             isHeader = true;
                             response.httpCode = atoi(tmp);
                             ut->delP(&tmp);
@@ -702,6 +705,9 @@ bool ESP_Signer::handleTokenResponse(int &httpCode)
                             {
                                 isHeader = false;
                                 ut->parseRespHeader(header.c_str(), response);
+                                #ifdef _ESP_SIGNER_PROTOCOL_DEBUG_
+                                    printf("Token response header %s\n", header.c_str());
+                                #endif
                                 header.clear();
                             }
                             else
@@ -753,10 +759,15 @@ bool ESP_Signer::handleTokenResponse(int &httpCode)
         stream->stop();
 
     httpCode = response.httpCode;
+    #ifdef _ESP_SIGNER_PROTOCOL_DEBUG_
+        printf("Token response status: %d\n", httpCode);
+    #endif
 
     if (payload.length() > 0 && !response.noContent)
     {
-
+        #ifdef _ESP_SIGNER_PROTOCOL_DEBUG_
+            printf("Token response body:\n*****\n%s\n*****\n", payload.c_str());
+        #endif
         config->signer.json->setJsonData(payload.c_str());
         payload.clear();
         return true;
@@ -1051,6 +1062,23 @@ bool ESP_Signer::createJWT()
     return true;
 }
 
+MBSTRING ESP_Signer::stripTrailingDots(MBSTRING token) {
+    MBSTRING outputToken = token;
+    if (token != nullptr && token.length() > 0) {
+        int oldLength = token.length();
+        int newLength = oldLength;
+        // Fix issue with trailing '.' which breaks the token...
+        while (newLength > 0 && token.c_str()[newLength - 1] == '.') {
+            newLength -= 1;
+        }
+        if (oldLength != newLength) {
+            outputToken = token.substr(0, newLength);
+            printf("Trimmed token to: [%s]\n", config->signer.tokens.access_token.c_str());
+        }
+    }
+    return outputToken;
+}
+
 bool ESP_Signer::requestTokens()
 {
 
@@ -1135,6 +1163,9 @@ bool ESP_Signer::requestTokens()
     ut->appendP(req, esp_signer_pgm_str_4);
 
     req += config->signer.json->raw();
+    #ifdef _ESP_SIGNER_PROTOCOL_DEBUG_
+        printf("Token request - sending:\n*****\n%s\n*****\n", req.c_str());
+    #endif
 #if defined(ESP32)
     config->signer.wcs->setInsecure();
     int ret = config->signer.wcs->send(req.c_str());
@@ -1192,8 +1223,10 @@ bool ESP_Signer::requestTokens()
         {
             if (config->signer.tokens.token_type == esp_signer_token_type_oauth2_access_token)
             {
-                if (parseJsonResponse(esp_signer_pgm_str_70))
+                if (parseJsonResponse(esp_signer_pgm_str_70)) {
                     config->signer.tokens.access_token = config->signer.result->to<const char *>();
+                    config->signer.tokens.access_token = stripTrailingDots(config->signer.tokens.access_token);
+                }
 
                 if (parseJsonResponse(esp_signer_pgm_str_71))
                     config->signer.tokens.auth_type = config->signer.result->to<const char *>();

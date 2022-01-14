@@ -181,6 +181,7 @@ private:
     unsigned long getExpireMS();
     bool isExpired();
     SignerConfig *getCfg();
+    MBSTRING stripTrailingDots(MBSTRING token);
 
 #if defined(ESP8266)
     void set_scheduled_callback(esp_signer_callback_function_t callback)
